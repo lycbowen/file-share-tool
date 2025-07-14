@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import List from '@mui/material/List';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemIcon from '@mui/material/ListItemIcon';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import ListItem from '@mui/material/ListItem';
@@ -14,14 +15,14 @@ import Typography from '@mui/material/Typography';
 import Container from '@mui/material/Container';
 import Divider from '@mui/material/Divider';
 import Toolbar from '@mui/material/Toolbar';
-import Grid from '@mui/material/Grid';
+import { Grid } from '@mui/material';
 
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 import DialogTitle from '@mui/material/DialogTitle';
 import Dialog from '@mui/material/Dialog';
 
-import { ListItemButton } from '@mui/material';
+import { Button, ListItemButton } from '@mui/material';
 
 const DemoPaper = styled(Paper)(({ theme }) => ({
   width: "80%",
@@ -39,64 +40,66 @@ interface File {
   sub_dir_num: number;
 }
 
+function normalizePath(base: string, append?: string): string {
+  const parts = (base + '/' + (append ?? '')).split('/').filter(Boolean);
+  return '/' + parts.join('/');
+}
+
+function getParentPath(currentPath: string): string {
+  const parts = currentPath.split('/').filter(Boolean);
+  parts.pop(); // 去掉最后一节
+  return '/' + parts.join('/');
+}
+
+function getDisplayPath(fullPath: string, basePath: string): string {
+  if (!basePath || !fullPath.startsWith(basePath)) return fullPath;
+  const relative = fullPath.substring(basePath.length);
+  return relative.startsWith("/") ? relative : "/" + relative;
+}
+
 function App() {
   const [files, setFiles] = useState<File[]>([]);
+  const [basePath, setBasePath] = useState<string>("");
   const [path, setPath] = useState<string>();
   const [dialogState, setDialogState] = useState<boolean>(false);
   const [shareUrl, setShareUrl] = useState<string>('');
   const [localIp, setLocalIp] = useState("");
-  const req = function (path: string) {
-    fetch(`/api/files?path=${path}`)
+  const req = function (path?: string) {
+    const query = path ? `?path=${encodeURIComponent(path)}` : '';
+    fetch(`/api/files${query}`)
       .then(response => response.json())
       .then(data => {
         if (data.files) {
-          setFiles(data.files)
-          setLocalIp(data.local_ip)
-          if (path === undefined) {
-            setPath(data.path)
-          }
+          setFiles(data.files);
+          setLocalIp(data.local_ip);
+          setBasePath((prev) => prev || data.path);
+          setPath(data.path); // 以后端返回为准
         } else {
-          console.warn(data.message)
+          console.warn(data.message);
         }
       })
       .catch(error => console.error('Error:', error));
-  }
+  };
 
   useEffect(() => {
-    req(path!)
-  }, [path]);
+    req();
+  }, []);
 
   const clickBtn = function (f: string, isDir: boolean, files: number) {
-    if (!isDir) {
-      const fileUrl = `/api/download?fname=${path}/${f}`;
+    const fullPath = normalizePath(path ?? '/', f);
 
-      // 创建一个虚拟<a>标签
+    if (!isDir) {
+      const fileUrl = `/api/download?fname=${fullPath}`;
       const link = document.createElement('a');
       link.href = fileUrl;
-
-      // 设置下载属性
-      link.download = 'yourFileName.pdf';
-
-      // 模拟点击
+      link.download = f;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      return
+      return;
     }
-    console.log(f)
-    let newPath = ''
-    if (path !== "/") {
-      newPath = `${path}/${f}`
-    } else {
-      newPath = `/${f}`
-    }
-
-    setPath(newPath)
-    if (files === 0) {
-      setFiles([])
-    }
-    console.log("切换路径至：", newPath)
-  }
+    req(fullPath);
+  };
 
   const share = function (fname: string) {
     if (path !== '/') {
@@ -108,26 +111,12 @@ function App() {
   }
 
   const clickBackBtn = function () {
-    console.log("back..")
-    if (path === undefined) {
-      setPath('')
-      return
-    }
-    const index = path?.lastIndexOf('/');
+    if (!path || path === "/") return;
 
-    if (index > 0) {
-      const result = path?.substring(0, index);
-      console.log(result);
-      setPath(result)
-      console.log("切换路径至：", result)
-    } else if (index === 0) {
-      setPath('/')
-      console.log("切换路径至：", '/')
-    } else {
-      console.error("String does not contain a slash.");
-    }
+    const parent = getParentPath(path);
+    req(parent);
+  };
 
-  }
   return (
     <Container maxWidth="lg">
       <Box style={{
@@ -138,7 +127,7 @@ function App() {
         alignItems: "center",
       }}>
         <Typography variant="h4" gutterBottom style={{ margin: "30px 70px", alignSelf: "flex-start" }}>
-          Index of {path}
+          Index of <code>{getDisplayPath(path ?? "", basePath)}</code>
         </Typography>
         <DemoPaper elevation={6} square={false}>
           <List dense={false} >
@@ -147,38 +136,44 @@ function App() {
                 <ListItemIcon>
                   <FolderOpenOutlinedIcon />
                 </ListItemIcon>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <ListItemText primary={'../'} />
+                <Box sx={{ flexGrow: 1 }}>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 6 }}>
+                      <ListItemText primary={'../'} />
+                    </Grid>
+                    <Grid size={{ xs: 4 }}>
+                    </Grid>
+                    <Grid size={{ xs: 2 }}>
+                    </Grid>
                   </Grid>
-                  <Grid item xs={4}>
-                  </Grid>
-                  <Grid item xs={2}>
-                  </Grid>
-                </Grid>
+                </Box>
+
               </ListItemButton>
             </ListItem>
             {files.map((item, index) => (
               [<Divider />,
               <ListItem key={index} secondaryAction={
                 <IconButton onClick={() => { share(item.file_name) }} edge="end" aria-label="more">
-                  <IosShareOutlinedIcon style={{display: item.is_dir ? 'none' : 'block'}}/>
+                  <IosShareOutlinedIcon style={{ display: item.is_dir ? 'none' : 'block' }} />
                 </IconButton>} disablePadding>
                 <ListItemButton onClick={() => { clickBtn(item.file_name, item.is_dir, item.sub_dir_num + item.sub_file_num) }}>
                   <ListItemIcon>
                     {item.is_dir ? <FolderOpenOutlinedIcon /> : <InsertDriveFileOutlinedIcon />}
                   </ListItemIcon>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <ListItemText primary={item.file_name} />
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 6 }}>
+                        <ListItemText primary={item.file_name} />
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <ListItemText secondary={item.file_modtime} />
+                      </Grid>
+                      <Grid size={{ xs: 2 }}>
+                        <ListItemText secondary={item.is_dir ? `${item.sub_dir_num} dirs ${item.sub_file_num} files` : item.file_size} />
+                      </Grid>
                     </Grid>
-                    <Grid item xs={4}>
-                      <ListItemText secondary={item.file_modtime} />
-                    </Grid>
-                    <Grid item xs={2}>
-                      <ListItemText secondary={item.is_dir ? `${item.sub_dir_num} dirs ${item.sub_file_num} files` : item.file_size} />
-                    </Grid>
-                  </Grid>
+                  </Box>
+
                 </ListItemButton>
               </ListItem>]
             ))}
@@ -186,11 +181,22 @@ function App() {
         </DemoPaper>
         <Toolbar style={{ flexShrink: 0 }}>
           <Typography variant="body1" color="inherit">
-            © File Share Tool. By <a href={`mailto:tumble-leap@outlook.com`} onClick={() => { window.location.href = `mailto:tumble-leap@outlook.com` }}>Mr. Chen</a>
+            © File Share Tool. By <a href={`mailto:ischenbowen@outlook.com`} onClick={() => { window.location.href = `mailto:ischenbowen@outlook.com` }}>cbowen</a>
           </Typography>
         </Toolbar>
         <Dialog open={dialogState} onClose={() => { setDialogState(false) }}>
-          <DialogTitle><QRCode value={shareUrl} /></DialogTitle>
+          <DialogTitle>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <QRCodeCanvas value={shareUrl} />
+              <Button
+                variant="text"
+                startIcon={<ContentCopyIcon />}
+                onClick={() => navigator.clipboard.writeText(shareUrl)}
+              >
+                复制链接
+              </Button>
+            </div>
+          </DialogTitle>
         </Dialog>
       </Box>
     </Container>

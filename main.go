@@ -41,15 +41,19 @@ var IgnoreList = []string{
 	".localized",
 }
 
+const (
+	defaultPort = 8000
+	dateFormat  = "2006/01/02 15:04:05"
+)
+
 func GetInternalIP() (string, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
 		return "", errors.New("internal IP fetch failed, detail:" + err.Error())
 	}
 	defer conn.Close()
-	res := conn.LocalAddr().String()
-	res = strings.Split(res, ":")[0]
-	return res, nil
+	ip := strings.Split(conn.LocalAddr().String(), ":")[0]
+	return ip, nil
 }
 
 func humanReadableSize(size int64) string {
@@ -80,7 +84,11 @@ func CountDirsAndFiles(path string) (dirs, files int, err error) {
 		return 0, 0, err
 	}
 	for _, v := range fs {
-		info, _ := v.Info()
+		info, err := v.Info()
+		if err != nil {
+			log.Printf("[WARN] Skipped unreadable entry: %v", err)
+			continue
+		}
 		if slices.Contains[[]string, string](IgnoreList, info.Name()) {
 			continue
 		}
@@ -93,90 +101,124 @@ func CountDirsAndFiles(path string) (dirs, files int, err error) {
 	return
 }
 
-var (
-	// homeDir    string
-	currentDir string
-	localIp    string
-	port       = 8000
-)
-
-func getFileListHandler(w http.ResponseWriter, r *http.Request) {
-	targetDir := r.URL.Query().Get("path")
-	if targetDir == "" || targetDir == "undefined" {
-		targetDir = currentDir
-	}
-
-	var resp = Resp{
-		TargetPath: targetDir,
-	}
-	resp.LocalIP = localIp + ":" + "8000"
-
-	fs, err := os.ReadDir(targetDir)
+func buildFileList(targetDir string) ([]File, error) {
+	entries, err := os.ReadDir(targetDir)
 	if err != nil {
-		resp.Message = err.Error()
-	} else {
-		var dirs, files []File
-		for _, v := range fs {
-			info, _ := v.Info()
-			if slices.Contains[[]string, string](IgnoreList, info.Name()) {
-				continue
-			}
-			var f File
-			f.FileName = info.Name()
-			f.FileModtime = info.ModTime().Local().Format("2006/01/02 15:04:05")
-			if info.IsDir() {
-				dNum, fNum, _ := CountDirsAndFiles(filepath.Join(targetDir, info.Name()))
-				f.SubDirNum = dNum
-				f.SubFileNum = fNum
-				f.IsDir = true
-				dirs = append(dirs, f)
-			} else {
-				f.FileSize = humanReadableSize(info.Size())
-				files = append(files, f)
-			}
-		}
-		resp.FileList = append(resp.FileList, dirs...)
-		resp.FileList = append(resp.FileList, files...)
+		return nil, err
 	}
 
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Content-Type", "application/json")
-	log.Println("request dir: ", targetDir)
-	json.NewEncoder(w).Encode(&resp)
+	var result []File
+	var dirs []File
+	var files []File
+
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			log.Printf("[WARN] Cannot read file info: %v", err)
+			continue
+		}
+		if slices.Contains[[]string, string](IgnoreList, info.Name()) {
+			continue
+		}
+		file := File{
+			FileName:    info.Name(),
+			FileModtime: info.ModTime().Local().Format(dateFormat),
+			IsDir:       info.IsDir(),
+		}
+
+		if info.IsDir() {
+			dNum, fNum, _ := CountDirsAndFiles(filepath.Join(targetDir, info.Name()))
+			file.SubDirNum = dNum
+			file.SubFileNum = fNum
+			dirs = append(dirs, file)
+		} else {
+			file.FileSize = humanReadableSize(info.Size())
+			files = append(files, file)
+		}
+	}
+
+	result = append(result, dirs...)
+	result = append(result, files...)
+	return result, nil
 }
 
-func downloadHandler(w http.ResponseWriter, r *http.Request) {
-	targetFile := r.URL.Query().Get("fname")
-	fmt.Println("request download file:", targetFile)
-	if targetFile == "" {
-		return
+// 路径校验：确保 target 是 base 的子路径
+func isSubPath(base, target string) bool {
+	baseAbs, err1 := filepath.Abs(base)
+	targetAbs, err2 := filepath.Abs(target)
+	if err1 != nil || err2 != nil {
+		return false
 	}
-
-	fileName := filepath.Base(targetFile)
-
-	// 打开文件
-	file, err := os.Open(targetFile)
+	rel, err := filepath.Rel(baseAbs, targetAbs)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Error opening file: %s", err), http.StatusInternalServerError)
-		return
+		return false
 	}
-	defer file.Close()
+	return !strings.HasPrefix(rel, "..")
+}
 
-	// 设置响应头
-	// w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-	// w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	// w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
-	w.Header().Set("Content-Type", "application/octet-stream")
+func getFileListHandler(rootDir, localIP string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rawPath := r.URL.Query().Get("path")
+		if rawPath == "" || rawPath == "undefined" {
+			rawPath = rootDir
+		}
 
-	// 将文件内容写入响应体
-	_, err = io.Copy(w, file)
-	log.Println("request download file: ", targetFile)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Error copying file to response: %s", err), http.StatusInternalServerError)
-		return
+		cleanPath := filepath.Clean(rawPath)
+		absPath, err := filepath.Abs(cleanPath)
+		if err != nil || !isSubPath(rootDir, absPath) {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return
+		}
+
+		resp := Resp{
+			LocalIP:    fmt.Sprintf("%s:%d", localIP, defaultPort),
+			TargetPath: absPath,
+		}
+
+		fileList, err := buildFileList(absPath)
+		if err != nil {
+			resp.Message = err.Error()
+		} else {
+			resp.FileList = fileList
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		log.Println("[INFO] Request dir:", absPath)
+		if err := json.NewEncoder(w).Encode(&resp); err != nil {
+			log.Printf("[ERROR] Encoding response: %v", err)
+		}
+	}
+}
+
+func downloadHandler(rootDir string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		targetFile := r.URL.Query().Get("fname")
+		if targetFile == "" {
+			http.Error(w, "Missing file name", http.StatusBadRequest)
+			return
+		}
+
+		absPath, err := filepath.Abs(filepath.Clean(targetFile))
+		if err != nil || !isSubPath(rootDir, absPath) {
+			http.Error(w, "Access denied", http.StatusForbidden)
+			return
+		}
+
+		file, err := os.Open(absPath)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Error opening file: %s", err), http.StatusInternalServerError)
+			return
+		}
+		defer file.Close()
+
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(absPath)))
+		w.Header().Set("Content-Type", "application/octet-stream")
+
+		if _, err := io.Copy(w, file); err != nil {
+			http.Error(w, fmt.Sprintf("Error sending file: %s", err), http.StatusInternalServerError)
+			return
+		}
+		log.Println("[INFO] File downloaded:", absPath)
 	}
 }
 
@@ -195,67 +237,55 @@ func openBrowser(url string) {
 	}
 
 	if err := cmd.Start(); err != nil {
-		fmt.Println("Error opening browser:", err)
+		log.Printf("[ERROR] Failed to open browser: %v", err)
 	}
 }
 
 func main() {
-
-	// get home dir
 	currentUser, err := user.Current()
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		log.Fatal("[FATAL] Failed to get current user:", err)
 	}
 	homeDir := currentUser.HomeDir
 
-	currentDir, _ = os.Getwd()
+	defaultDir, err := os.Getwd()
+	if err != nil {
+		log.Fatal("[FATAL] Failed to get working directory:", err)
+	}
 
-	// command line tool
-	var cmdlDir string
-	flag.StringVar(&cmdlDir, "t", currentDir, "The file server root directory, the default is the current directory")
+	var targetDir string
+	flag.StringVar(&targetDir, "t", defaultDir, "Directory to share (default: current dir, use 'home' for home directory)")
 	flag.Parse()
 
-	if cmdlDir != "" {
-		if cmdlDir == "home" {
-			currentDir = homeDir
-		} else {
-			currentDir = cmdlDir
-		}
+	if targetDir == "home" {
+		targetDir = homeDir
 	}
 
-	// get ip
-	localIpAddr, err := GetInternalIP()
+	localIP, err := GetInternalIP()
 	if err != nil {
-		log.Println(err)
-		log.Println("并没有获取到本机的ip地址呢，请手动查询～")
+		log.Printf("[WARN] Failed to get local IP: %v", err)
+		localIP = "localhost"
 	} else {
-		log.Println("本机ip：" + localIpAddr)
-		localIp = localIpAddr
+		log.Println("[INFO] Local IP:", localIP)
 	}
 
-	// 设置路由和处理函数
-	http.HandleFunc("/api/files", getFileListHandler)
-	http.HandleFunc("/api/download", downloadHandler)
+	http.HandleFunc("/api/files", getFileListHandler(targetDir, localIP))
+	http.HandleFunc("/api/download", downloadHandler(targetDir))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// 在这里处理React项目的静态文件
 		fs, err := webapp.FS()
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
-
 		http.FileServer(fs).ServeHTTP(w, r)
 	})
 
-	// 启动服务器并监听端口
+	log.Printf("[INFO] Server is running at http://localhost:%d", defaultPort)
+	log.Printf("[INFO] LAN access: http://%s:%d", localIP, defaultPort)
 
-	log.Printf("Server is running on http://localhost:%d\n", port)
-	log.Printf("Please open http://localhost:%d in this PC\n", port)
-	log.Printf("Or open http://%s:%d in other PC under the LAN\n", localIp, port)
-	go openBrowser(fmt.Sprintf("http://localhost:%d", port))
-	err = http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
-	if err != nil {
-		fmt.Println("Error:", err)
+	go openBrowser(fmt.Sprintf("http://localhost:%d", defaultPort))
+
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", defaultPort), nil); err != nil {
+		log.Fatalf("[FATAL] Server error: %v", err)
 	}
 }
