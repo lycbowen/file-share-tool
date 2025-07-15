@@ -284,7 +284,7 @@ func main() {
 	log.Printf("[INFO] Server is running at http://localhost:%d", defaultPort)
 	log.Printf("[INFO] LAN access: http://%s:%d", localIP, defaultPort)
 
-	go openBrowser(fmt.Sprintf("http://localhost:%d", defaultPort))
+	go openBrowser(fmt.Sprintf("http://%s:%d", localIP, defaultPort))
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", defaultPort), nil); err != nil {
 		log.Fatalf("[FATAL] Server error: %v", err)
