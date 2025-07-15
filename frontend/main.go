@@ -1,4 +1,4 @@
-package webapp
+package frontend
 
 import (
 	"embed"
@@ -6,11 +6,11 @@ import (
 	"net/http"
 )
 
-//go:embed build
+//go:embed dist
 var buildFS embed.FS
 
 func FS() (http.FileSystem, error) {
-	ret, err := fs.Sub(buildFS, "build")
+	ret, err := fs.Sub(buildFS, "dist")
 	if err != nil {
 		return nil, err
 	}

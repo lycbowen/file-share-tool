@@ -1,32 +1,17 @@
 import { useEffect, useState } from 'react';
-import List from '@mui/material/List';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined';
-import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
-import ListItem from '@mui/material/ListItem';
-import IconButton from '@mui/material/IconButton';
-import IosShareOutlinedIcon from '@mui/icons-material/IosShareOutlined';
-import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
-import { styled } from '@mui/material/styles';
-import Typography from '@mui/material/Typography';
-import Container from '@mui/material/Container';
-import Divider from '@mui/material/Divider';
-import Toolbar from '@mui/material/Toolbar';
-import { Grid } from '@mui/material';
 
+import { List, ListItem, ListItemText, ListItemIcon, IconButton, Button, ListItemButton } from '@mui/material';
+import { Box, Paper, Typography, Container, Divider, Toolbar, Grid, DialogTitle, Dialog } from '@mui/material';
+import { ContentCopy, FolderOpenOutlined, InsertDriveFileOutlined, IosShareOutlined } from '@mui/icons-material';
+import { styled } from '@mui/material/styles';
 import { QRCodeCanvas } from 'qrcode.react';
 
-import DialogTitle from '@mui/material/DialogTitle';
-import Dialog from '@mui/material/Dialog';
-
-import { Button, ListItemButton } from '@mui/material';
+import "./App.css"
 
 const DemoPaper = styled(Paper)(({ theme }) => ({
   width: "80%",
   padding: theme.spacing(2),
+  borderRadius: 8,
   ...theme.typography.body2,
   textAlign: 'center',
 }));
@@ -85,7 +70,7 @@ function App() {
     req();
   }, []);
 
-  const clickBtn = function (f: string, isDir: boolean, files: number) {
+  const clickBtn = function (f: string, isDir: boolean) {
     const fullPath = normalizePath(path ?? '/', f);
 
     if (!isDir) {
@@ -118,7 +103,7 @@ function App() {
   };
 
   return (
-    <Container maxWidth="lg">
+    <Container maxWidth="md">
       <Box style={{
         display: 'flex',
         minWidth: "650px",
@@ -126,7 +111,7 @@ function App() {
         flexDirection: "column",
         alignItems: "center",
       }}>
-        <Typography variant="h4" gutterBottom style={{ margin: "30px 70px", alignSelf: "flex-start" }}>
+        <Typography variant="h4" gutterBottom style={{ margin: "30px 80px", alignSelf: "flex-start" }}>
           Index of <code>{getDisplayPath(path ?? "", basePath)}</code>
         </Typography>
         <DemoPaper elevation={6} square={false}>
@@ -134,7 +119,7 @@ function App() {
             <ListItem key={-1} secondaryAction={<IconButton edge="end" aria-label="more"></IconButton>} disablePadding>
               <ListItemButton onClick={clickBackBtn}>
                 <ListItemIcon>
-                  <FolderOpenOutlinedIcon />
+                  <FolderOpenOutlined />
                 </ListItemIcon>
                 <Box sx={{ flexGrow: 1 }}>
                   <Grid container spacing={2}>
@@ -154,11 +139,11 @@ function App() {
               [<Divider />,
               <ListItem key={index} secondaryAction={
                 <IconButton onClick={() => { share(item.file_name) }} edge="end" aria-label="more">
-                  <IosShareOutlinedIcon style={{ display: item.is_dir ? 'none' : 'block' }} />
+                  <IosShareOutlined style={{ display: item.is_dir ? 'none' : 'block' }} />
                 </IconButton>} disablePadding>
-                <ListItemButton onClick={() => { clickBtn(item.file_name, item.is_dir, item.sub_dir_num + item.sub_file_num) }}>
+                <ListItemButton onClick={() => { clickBtn(item.file_name, item.is_dir) }}>
                   <ListItemIcon>
-                    {item.is_dir ? <FolderOpenOutlinedIcon /> : <InsertDriveFileOutlinedIcon />}
+                    {item.is_dir ? <FolderOpenOutlined /> : <InsertDriveFileOutlined />}
                   </ListItemIcon>
                   <Box sx={{ flexGrow: 1 }}>
                     <Grid container spacing={2}>
@@ -190,7 +175,7 @@ function App() {
               <QRCodeCanvas value={shareUrl} />
               <Button
                 variant="text"
-                startIcon={<ContentCopyIcon />}
+                startIcon={<ContentCopy />}
                 onClick={() => navigator.clipboard.writeText(shareUrl)}
               >
                 复制链接

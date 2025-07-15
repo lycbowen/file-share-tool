@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"file-share-tool/webapp"
+	"file-share-tool/frontend"
 	"flag"
 	"fmt"
 	"io"
@@ -89,7 +89,7 @@ func CountDirsAndFiles(path string) (dirs, files int, err error) {
 			log.Printf("[WARN] Skipped unreadable entry: %v", err)
 			continue
 		}
-		if slices.Contains[[]string, string](IgnoreList, info.Name()) {
+		if slices.Contains(IgnoreList, info.Name()) {
 			continue
 		}
 		if info.IsDir() {
@@ -117,7 +117,7 @@ func buildFileList(targetDir string) ([]File, error) {
 			log.Printf("[WARN] Cannot read file info: %v", err)
 			continue
 		}
-		if slices.Contains[[]string, string](IgnoreList, info.Name()) {
+		if slices.Contains(IgnoreList, info.Name()) {
 			continue
 		}
 		file := File{
@@ -162,7 +162,7 @@ func getFileListHandler(rootDir, localIP string) http.HandlerFunc {
 		if rawPath == "" || rawPath == "undefined" {
 			rawPath = rootDir
 		}
-
+		rawPath = strings.TrimPrefix(rawPath, "/")
 		cleanPath := filepath.Clean(rawPath)
 		absPath, err := filepath.Abs(cleanPath)
 		if err != nil || !isSubPath(rootDir, absPath) {
@@ -170,6 +170,7 @@ func getFileListHandler(rootDir, localIP string) http.HandlerFunc {
 			return
 		}
 
+		absPath = strings.ReplaceAll(absPath, "\\", "/")
 		resp := Resp{
 			LocalIP:    fmt.Sprintf("%s:%d", localIP, defaultPort),
 			TargetPath: absPath,
@@ -197,7 +198,7 @@ func downloadHandler(rootDir string) http.HandlerFunc {
 			http.Error(w, "Missing file name", http.StatusBadRequest)
 			return
 		}
-
+		targetFile = strings.TrimPrefix(targetFile, "/")
 		absPath, err := filepath.Abs(filepath.Clean(targetFile))
 		if err != nil || !isSubPath(rootDir, absPath) {
 			http.Error(w, "Access denied", http.StatusForbidden)
@@ -272,7 +273,7 @@ func main() {
 	http.HandleFunc("/api/files", getFileListHandler(targetDir, localIP))
 	http.HandleFunc("/api/download", downloadHandler(targetDir))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fs, err := webapp.FS()
+		fs, err := frontend.FS()
 		if err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return

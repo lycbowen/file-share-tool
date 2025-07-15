@@ -6,8 +6,8 @@ BINARY_NAME = file-share
 ENV = GOPROXY=https://goproxy.cn,direct
 
 build-frontend:
-	cd webapp && npm install
-	cd webapp && npm run build
+	cd frontend && npm install
+	cd frontend && npm run build
 
 build:
 	$(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)
