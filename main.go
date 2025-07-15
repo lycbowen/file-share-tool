@@ -162,7 +162,9 @@ func getFileListHandler(rootDir, localIP string) http.HandlerFunc {
 		if rawPath == "" || rawPath == "undefined" {
 			rawPath = rootDir
 		}
-		rawPath = strings.TrimPrefix(rawPath, "/")
+		if runtime.GOOS == "windows" {
+			rawPath = strings.TrimPrefix(rawPath, "/")
+		}
 		cleanPath := filepath.Clean(rawPath)
 		absPath, err := filepath.Abs(cleanPath)
 		if err != nil || !isSubPath(rootDir, absPath) {
@@ -198,7 +200,9 @@ func downloadHandler(rootDir string) http.HandlerFunc {
 			http.Error(w, "Missing file name", http.StatusBadRequest)
 			return
 		}
-		targetFile = strings.TrimPrefix(targetFile, "/")
+		if runtime.GOOS == "windows" {
+			targetFile = strings.TrimPrefix(targetFile, "/")
+		}
 		absPath, err := filepath.Abs(filepath.Clean(targetFile))
 		if err != nil || !isSubPath(rootDir, absPath) {
 			http.Error(w, "Access denied", http.StatusForbidden)
