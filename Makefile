@@ -9,9 +9,6 @@ build-frontend:
 	cd frontend && npm install
 	cd frontend && npm run build
 
-build:
-	$(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)
-
 build-windows:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe
 
@@ -27,4 +24,4 @@ clean:
 	rm -rf $(BUILD_DIR)
 	rm -rf webapp/$(BUILD_DIR)
 
-.PHONY: build-frontend build build-windows build-linux build-darwin build-all clean
+.PHONY: build-frontend build-windows build-linux build-darwin build-all clean

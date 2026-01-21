@@ -41,4 +41,4 @@ jobs:
         with:
           name: binaries
           path: |
-            build/file-share-*
+            build/*
