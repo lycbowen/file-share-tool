@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"file-share-tool/frontend"
 	"flag"
 	"fmt"
 	"io"
@@ -17,6 +16,8 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+
+	"file-share-tool/frontend"
 )
 
 type File struct {
@@ -42,20 +43,29 @@ var IgnoreList = []string{
 }
 
 const (
-	defaultPort = 8000
 	dateFormat  = "2006/01/02 15:04:05"
+	defaultPort = 8000
 )
 
+// ---------- 工具函数 ----------
+
+// 判断文件是否忽略
+func isIgnored(name string) bool {
+	return slices.Contains(IgnoreList, name)
+}
+
+// 获取内网 IP
 func GetInternalIP() (string, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
-		return "", errors.New("internal IP fetch failed, detail:" + err.Error())
+		return "", fmt.Errorf("internal IP fetch failed: %w", err)
 	}
 	defer conn.Close()
 	ip := strings.Split(conn.LocalAddr().String(), ":")[0]
 	return ip, nil
 }
 
+// 转换文件大小为可读格式
 func humanReadableSize(size int64) string {
 	const (
 		KB = 1 << 10
@@ -63,7 +73,6 @@ func humanReadableSize(size int64) string {
 		GB = 1 << 30
 		TB = 1 << 40
 	)
-
 	switch {
 	case size >= TB:
 		return fmt.Sprintf("%.2f TB", float64(size)/TB)
@@ -78,18 +87,19 @@ func humanReadableSize(size int64) string {
 	}
 }
 
+// 统计子目录和文件数量
 func CountDirsAndFiles(path string) (dirs, files int, err error) {
-	fs, err := os.ReadDir(path)
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		return 0, 0, err
 	}
-	for _, v := range fs {
+	for _, v := range entries {
 		info, err := v.Info()
 		if err != nil {
 			log.Printf("[WARN] Skipped unreadable entry: %v", err)
 			continue
 		}
-		if slices.Contains(IgnoreList, info.Name()) {
+		if isIgnored(info.Name()) {
 			continue
 		}
 		if info.IsDir() {
@@ -101,26 +111,24 @@ func CountDirsAndFiles(path string) (dirs, files int, err error) {
 	return
 }
 
+// 构建文件列表
 func buildFileList(targetDir string) ([]File, error) {
 	entries, err := os.ReadDir(targetDir)
 	if err != nil {
 		return nil, err
 	}
-
-	var result []File
-	var dirs []File
-	var files []File
-
+	var result, dirs, files []File
 	for _, entry := range entries {
 		info, err := entry.Info()
 		if err != nil {
 			log.Printf("[WARN] Cannot read file info: %v", err)
 			continue
 		}
-		if slices.Contains(IgnoreList, info.Name()) {
+		if isIgnored(info.Name()) {
 			continue
 		}
-		file := File{
+
+		f := File{
 			FileName:    info.Name(),
 			FileModtime: info.ModTime().Local().Format(dateFormat),
 			IsDir:       info.IsDir(),
@@ -128,21 +136,20 @@ func buildFileList(targetDir string) ([]File, error) {
 
 		if info.IsDir() {
 			dNum, fNum, _ := CountDirsAndFiles(filepath.Join(targetDir, info.Name()))
-			file.SubDirNum = dNum
-			file.SubFileNum = fNum
-			dirs = append(dirs, file)
+			f.SubDirNum = dNum
+			f.SubFileNum = fNum
+			dirs = append(dirs, f)
 		} else {
-			file.FileSize = humanReadableSize(info.Size())
-			files = append(files, file)
+			f.FileSize = humanReadableSize(info.Size())
+			files = append(files, f)
 		}
 	}
-
 	result = append(result, dirs...)
 	result = append(result, files...)
 	return result, nil
 }
 
-// 路径校验：确保 target 是 base 的子路径
+// 判断 target 是否是 base 的子路径
 func isSubPath(base, target string) bool {
 	baseAbs, err1 := filepath.Abs(base)
 	targetAbs, err2 := filepath.Abs(target)
@@ -156,37 +163,49 @@ func isSubPath(base, target string) bool {
 	return !strings.HasPrefix(rel, "..")
 }
 
+// 获取安全绝对路径
+func safeAbsPath(rootDir, target string) (string, error) {
+	if runtime.GOOS == "windows" {
+		target = strings.TrimPrefix(target, "/")
+	}
+	cleanPath := filepath.Clean(target)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return "", err
+	}
+	if !isSubPath(rootDir, absPath) {
+		return "", errors.New("access denied")
+	}
+	return filepath.ToSlash(absPath), nil
+}
+
+// ---------- HTTP Handlers ----------
+
 func getFileListHandler(rootDir, localIP string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rawPath := r.URL.Query().Get("path")
 		if rawPath == "" || rawPath == "undefined" {
 			rawPath = rootDir
 		}
-		if runtime.GOOS == "windows" {
-			rawPath = strings.TrimPrefix(rawPath, "/")
-		}
-		cleanPath := filepath.Clean(rawPath)
-		absPath, err := filepath.Abs(cleanPath)
-		if err != nil || !isSubPath(rootDir, absPath) {
+
+		absPath, err := safeAbsPath(rootDir, rawPath)
+		if err != nil {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
 
-		absPath = strings.ReplaceAll(absPath, "\\", "/")
+		fileList, err := buildFileList(absPath)
 		resp := Resp{
 			LocalIP:    fmt.Sprintf("%s:%d", localIP, defaultPort),
 			TargetPath: absPath,
+			FileList:   fileList,
 		}
-
-		fileList, err := buildFileList(absPath)
 		if err != nil {
 			resp.Message = err.Error()
-		} else {
-			resp.FileList = fileList
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		log.Println("[INFO] Request dir:", absPath)
+		log.Printf("[INFO] Request dir: %s", absPath)
 		if err := json.NewEncoder(w).Encode(&resp); err != nil {
 			log.Printf("[ERROR] Encoding response: %v", err)
 		}
@@ -200,11 +219,9 @@ func downloadHandler(rootDir string) http.HandlerFunc {
 			http.Error(w, "Missing file name", http.StatusBadRequest)
 			return
 		}
-		if runtime.GOOS == "windows" {
-			targetFile = strings.TrimPrefix(targetFile, "/")
-		}
-		absPath, err := filepath.Abs(filepath.Clean(targetFile))
-		if err != nil || !isSubPath(rootDir, absPath) {
+
+		absPath, err := safeAbsPath(rootDir, targetFile)
+		if err != nil {
 			http.Error(w, "Access denied", http.StatusForbidden)
 			return
 		}
@@ -218,26 +235,29 @@ func downloadHandler(rootDir string) http.HandlerFunc {
 
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filepath.Base(absPath)))
 		w.Header().Set("Content-Type", "application/octet-stream")
-
 		if _, err := io.Copy(w, file); err != nil {
 			http.Error(w, fmt.Sprintf("Error sending file: %s", err), http.StatusInternalServerError)
 			return
 		}
-		log.Println("[INFO] File downloaded:", absPath)
+		log.Printf("[INFO] File downloaded: %s", absPath)
 	}
 }
 
-func openBrowser(url string) {
+// ---------- 浏览器自动打开 ----------
+func openBrowser(url string, autoOpen bool) {
+	if !autoOpen {
+		return
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
-	case "darwin": // macOS
+	case "darwin":
 		cmd = exec.Command("open", url)
-	case "linux": // Linux
+	case "linux":
 		cmd = exec.Command("xdg-open", url)
-	case "windows": // Windows
+	case "windows":
 		cmd = exec.Command("cmd", "/c", "start", url)
 	default:
-		fmt.Println("Unsupported platform")
+		log.Println("[WARN] Unsupported platform for browser auto-open")
 		return
 	}
 
@@ -245,6 +265,8 @@ func openBrowser(url string) {
 		log.Printf("[ERROR] Failed to open browser: %v", err)
 	}
 }
+
+// ---------- main ----------
 
 func main() {
 	currentUser, err := user.Current()
@@ -259,7 +281,11 @@ func main() {
 	}
 
 	var targetDir string
+	var port int
+	var autoOpen bool
 	flag.StringVar(&targetDir, "t", defaultDir, "Directory to share (default: current dir, use 'home' for home directory)")
+	flag.IntVar(&port, "p", defaultPort, "Port to run server on")
+	flag.BoolVar(&autoOpen, "open", true, "Automatically open browser")
 	flag.Parse()
 
 	if targetDir == "home" {
@@ -285,12 +311,12 @@ func main() {
 		http.FileServer(fs).ServeHTTP(w, r)
 	})
 
-	log.Printf("[INFO] Server is running at http://localhost:%d", defaultPort)
-	log.Printf("[INFO] LAN access: http://%s:%d", localIP, defaultPort)
+	serverURL := fmt.Sprintf("http://%s:%d", localIP, port)
+	log.Printf("[INFO] Server is running at %s", serverURL)
+	log.Printf("[INFO] LAN access: %s", serverURL)
+	go openBrowser(serverURL, autoOpen)
 
-	go openBrowser(fmt.Sprintf("http://%s:%d", localIP, defaultPort))
-
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", defaultPort), nil); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
 		log.Fatalf("[FATAL] Server error: %v", err)
 	}
 }
