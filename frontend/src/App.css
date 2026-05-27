@@ -1,41 +1,73 @@
-#root {
-  margin: 0 auto;
-  width: 100%;
+.app-shell {
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+.topbar {
+  border-bottom: 1px solid #dfe5ef;
+  backdrop-filter: blur(12px);
+}
+
+.topbar-inner {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.content {
+  padding-top: 28px;
+  padding-bottom: 40px;
+}
+
+.path-panel,
+.file-panel {
+  border-radius: 8px;
+  border-color: #dfe5ef;
+  overflow: hidden;
+}
+
+.path-panel {
+  padding: 16px;
+}
+
+.breadcrumbs button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.file-row {
+  min-height: 72px;
+  gap: 12px;
+}
+
+.file-meta {
+  width: 180px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.empty-state {
+  min-height: 260px;
+  gap: 14px;
+}
+
+.share-url {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+@media (max-width: 700px) {
+  .content {
+    padding: 16px 12px 28px;
   }
-  to {
-    transform: rotate(360deg);
+
+  .file-row {
+    align-items: flex-start;
+    padding-right: 56px;
   }
-}
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+  .file-meta {
+    display: none;
   }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
 }

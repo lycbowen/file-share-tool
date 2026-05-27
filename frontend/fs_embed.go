@@ -1,3 +1,5 @@
+//go:build embed_frontend
+
 package frontend
 
 import (
@@ -9,10 +11,10 @@ import (
 //go:embed dist
 var buildFS embed.FS
 
-func FS() (http.FileSystem, error) {
+func FS() http.FileSystem {
 	ret, err := fs.Sub(buildFS, "dist")
 	if err != nil {
-		return nil, err
+		return http.FS(buildFS)
 	}
-	return http.FS(ret), nil
+	return http.FS(ret)
 }
