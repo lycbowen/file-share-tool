@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"file-share-tool/frontend"
@@ -43,7 +44,10 @@ func main() {
 	log.Printf("[INFO] Sharing: %s", share.Root())
 	log.Printf("[INFO] Server is running at %s", serverURL)
 	log.Printf("[INFO] Listening on %s", cfg.Address())
-	go openBrowser(serverURL, cfg.AutoOpen)
+	openBrowser(serverURL, cfg.AutoOpen)
+	if err := printAccessQRCode(os.Stdout, serverURL); err != nil {
+		log.Printf("[WARN] Failed to print QR code: %v", err)
+	}
 
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		_ = srv.Shutdown(context.Background())
