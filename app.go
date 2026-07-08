@@ -1,20 +1,25 @@
-package main
+package fileshare
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"file-share-tool/frontend"
+	"github.com/hicbowen/file-share-tool/frontend"
 )
 
-func main() {
+func Run() {
 	cfg, err := parseConfig()
 	if err != nil {
 		log.Fatal("[FATAL] ", err)
+	}
+	if cfg.ShowVersion {
+		fmt.Fprintln(os.Stdout, VersionString())
+		return
 	}
 
 	share, err := NewShareFS(cfg.TargetDir)

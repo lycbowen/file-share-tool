@@ -13,22 +13,28 @@
 
 ## 快速使用
 
+通过 Go 安装：
+
+```bash
+go install github.com/hicbowen/file-share-tool/cmd/fshare@latest
+```
+
 分享当前目录：
 
 ```bash
-go run .
+fshare
 ```
 
 分享指定目录：
 
 ```bash
-go run . -t "D:\Downloads"
+fshare -t "D:\Downloads"
 ```
 
 分享用户主目录：
 
 ```bash
-go run . -t home
+fshare -t home
 ```
 
 启动后终端会输出访问地址，例如：
@@ -46,18 +52,25 @@ http://192.168.1.3:8000
 -p       服务端口，默认 8000
 -host    监听地址，默认 0.0.0.0
 -open    是否自动打开浏览器，默认 true
+-version 输出版本号并退出
 ```
 
 示例：
 
 ```bash
-go run . -t home -p 9000 -host 0.0.0.0 -open=false
+fshare -t home -p 9000 -host 0.0.0.0 -open=false
 ```
 
 如果只想本机访问，可以使用：
 
 ```bash
-go run . -host 127.0.0.1
+fshare -host 127.0.0.1
+```
+
+查看版本：
+
+```bash
+fshare -version
 ```
 
 ## 构建
@@ -84,12 +97,14 @@ make build-all
 产物会输出到 `build/`：
 
 ```text
-file-share-windows-amd64.exe
-file-share-linux-amd64
-file-share-darwin-arm64
+fshare-windows-amd64.exe
+fshare-linux-amd64
+fshare-darwin-arm64
 ```
 
 默认构建会把 `frontend/dist` 嵌入到 Go 二进制中，因此构建前需要先生成前端产物。开发时如果想直接使用 `frontend/public` 或本地 `frontend/dist` 目录，可以加 `-tags dev_frontend`。
+
+如果希望别人可以通过 `go install github.com/hicbowen/file-share-tool/cmd/fshare@latest` 安装，需要把构建后的 `frontend/dist` 一起提交到仓库。
 
 没有 make 时，可以手动执行：
 
@@ -98,7 +113,7 @@ cd frontend
 npm ci
 npm run build
 cd ..
-go build -o build/file-share
+go build -o build/fshare ./cmd/fshare
 ```
 
 ## 开发检查

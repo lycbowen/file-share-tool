@@ -1,4 +1,4 @@
-module file-share-tool
+module github.com/hicbowen/file-share-tool
 
 go 1.24
 

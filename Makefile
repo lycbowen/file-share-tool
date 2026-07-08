@@ -1,7 +1,7 @@
 GOBIN = go
 
 BUILD_DIR = build
-BINARY_NAME = file-share
+BINARY_NAME = fshare
 
 ENV = GOPROXY=https://goproxy.cn,direct
 
@@ -11,15 +11,15 @@ build-frontend:
 
 build-windows:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/fshare
 
 build-linux:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/fshare
 
 build-darwin:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/fshare
 
 build-all: build-windows build-linux build-darwin
 
