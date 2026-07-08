@@ -1,23 +1,30 @@
-# File Share Tool
+# fshare
 
-一个轻量的局域网文件分享工具。启动后会把指定目录以网页形式分享给同一局域网内的设备，支持浏览目录、下载文件、二维码分享和复制下载链接。
+`fshare` 是一个轻量的局域网文件分享工具。你可以把电脑上的某个目录临时变成网页，同一局域网里的手机、平板或电脑打开地址后，就能浏览目录、下载文件、扫码访问或复制下载链接。
 
-## 功能
+适合这些场景：
 
-- 局域网内通过浏览器访问，无需安装客户端
-- 文件夹优先展示，支持返回上级和面包屑导航
-- 文件下载链接可生成二维码，也可一键复制
-- 支持 Windows、Linux、macOS 作为分享端
-- 后端使用相对路径访问共享目录，阻止路径穿越和符号链接逃逸
-- 前端使用 React + MUI，支持桌面和移动端布局
+- 电脑和手机之间临时传文件
+- 在同一个 Wi-Fi 下给别人分享一个文件夹
+- 不想登录账号、不想装网盘客户端，只想快速传一下
 
-## 快速使用
+## 安装
 
-通过 Go 安装：
+需要先安装 Go，然后执行：
 
 ```bash
 go install github.com/hicbowen/file-share-tool/cmd/fshare@latest
 ```
+
+安装完成后，确认命令可用：
+
+```bash
+fshare -version
+```
+
+如果提示找不到 `fshare`，通常是 Go 的 bin 目录还没有加入 `PATH`。
+
+## 快速开始
 
 分享当前目录：
 
@@ -37,31 +44,29 @@ fshare -t "D:\Downloads"
 fshare -t home
 ```
 
-启动后终端会输出访问地址，例如：
+启动后，终端会显示一个访问地址，例如：
 
 ```text
 http://192.168.1.3:8000
 ```
 
-同一局域网内的手机、平板或电脑打开这个地址即可浏览和下载文件。
+同一局域网内的设备打开这个地址，就可以浏览和下载你分享的文件。
 
-## 命令参数
+## 常用命令
 
-```text
--t       要分享的目录，默认为当前目录；也可以传 home 表示用户主目录
--p       服务端口，默认 8000
--host    监听地址，默认 0.0.0.0
--open    是否自动打开浏览器，默认 true
--version 输出版本号并退出
-```
-
-示例：
+指定端口：
 
 ```bash
-fshare -t home -p 9000 -host 0.0.0.0 -open=false
+fshare -p 9000
 ```
 
-如果只想本机访问，可以使用：
+分享指定目录并关闭自动打开浏览器：
+
+```bash
+fshare -t "D:\Downloads" -open=false
+```
+
+只允许本机访问：
 
 ```bash
 fshare -host 127.0.0.1
@@ -73,99 +78,24 @@ fshare -host 127.0.0.1
 fshare -version
 ```
 
-## 构建
-
-需要安装：
-
-- Go 1.24+
-- Node.js
-- npm
-- make（可选，用于 Makefile）
-
-构建前端：
-
-```bash
-make build-frontend
-```
-
-构建三平台可执行文件：
-
-```bash
-make build-all
-```
-
-产物会输出到 `build/`：
+## 参数
 
 ```text
-fshare-windows-amd64.exe
-fshare-linux-amd64
-fshare-darwin-arm64
+-t       要分享的目录，默认为当前目录；也可以传 home 表示用户主目录
+-p       服务端口，默认 8000
+-host    监听地址，默认 0.0.0.0
+-open    是否自动打开浏览器，默认 true
+-version 输出版本号并退出
 ```
 
-默认构建会把 `frontend/dist` 嵌入到 Go 二进制中，因此构建前需要先生成前端产物。开发时如果想直接使用 `frontend/public` 或本地 `frontend/dist` 目录，可以加 `-tags dev_frontend`。
+## 使用提醒
 
-如果希望别人可以通过 `go install github.com/hicbowen/file-share-tool/cmd/fshare@latest` 安装，需要把构建后的 `frontend/dist` 一起提交到仓库。
-
-没有 make 时，可以手动执行：
-
-```bash
-cd frontend
-npm ci
-npm run build
-cd ..
-go build -o build/fshare ./cmd/fshare
-```
-
-## 开发检查
-
-后端测试（需要已生成 `frontend/dist`）：
-
-```bash
-go test ./...
-```
-
-前端检查：
-
-```bash
-cd frontend
-npm run lint
-npm run build
-```
-
-开发模式后端测试（不需要提前生成 `frontend/dist`）：
-
-```bash
-go test -tags dev_frontend ./...
-```
-
-## API
-
-列出目录：
-
-```http
-GET /api/files?path=<relative-path>
-```
-
-下载文件：
-
-```http
-GET /api/download?path=<relative-path>
-```
-
-说明：
-
-- `path` 是共享根目录内的相对路径
-- 根目录可以省略 `path` 或传空值
-- 旧版 `fname` 参数仍兼容下载接口
-
-## 安全说明
-
-这个工具默认保持免登录，适合在可信局域网内临时分享文件。同一网络内知道地址的人可以访问共享目录中的文件。
+`fshare` 默认不需要登录，知道访问地址的人就可以看到你分享目录里的文件。它更适合在可信的局域网中临时使用。
 
 建议：
 
 - 只分享需要传输的目录，不要直接分享整个磁盘
 - 公共 Wi-Fi 或不可信网络中不要使用默认局域网分享
-- 需要仅本机访问时使用 `-host 127.0.0.1`
+- 只想自己本机访问时，使用 `fshare -host 127.0.0.1`
 
-后端会阻止 `..` 路径穿越、绝对路径逃逸和指向共享目录外部的符号链接访问，但它不是权限系统，也不提供账号认证。
+程序会阻止 `..` 路径穿越、绝对路径逃逸和指向分享目录外部的符号链接访问，但它不是权限系统，也不提供账号认证。
