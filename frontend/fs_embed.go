@@ -1,4 +1,4 @@
-//go:build embed_frontend
+//go:build !dev_frontend
 
 package frontend
 

@@ -11,15 +11,15 @@ build-frontend:
 
 build-windows:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(ENV) $(GOBIN) build -tags embed_frontend -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe
 
 build-linux:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(ENV) $(GOBIN) build -tags embed_frontend -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64
 
 build-darwin:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(ENV) $(GOBIN) build -tags embed_frontend -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(ENV) $(GOBIN) build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64
 
 build-all: build-windows build-linux build-darwin
 

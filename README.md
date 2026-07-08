@@ -89,7 +89,7 @@ file-share-linux-amd64
 file-share-darwin-arm64
 ```
 
-发布构建会使用 `embed_frontend` 标签，把 `frontend/dist` 嵌入到 Go 二进制中。开发和测试时不需要提前生成 `frontend/dist`。
+默认构建会把 `frontend/dist` 嵌入到 Go 二进制中，因此构建前需要先生成前端产物。开发时如果想直接使用 `frontend/public` 或本地 `frontend/dist` 目录，可以加 `-tags dev_frontend`。
 
 没有 make 时，可以手动执行：
 
@@ -98,12 +98,12 @@ cd frontend
 npm ci
 npm run build
 cd ..
-go build -tags embed_frontend -o build/file-share
+go build -o build/file-share
 ```
 
 ## 开发检查
 
-后端测试：
+后端测试（需要已生成 `frontend/dist`）：
 
 ```bash
 go test ./...
@@ -117,10 +117,10 @@ npm run lint
 npm run build
 ```
 
-发布模式测试：
+开发模式后端测试（不需要提前生成 `frontend/dist`）：
 
 ```bash
-go test -tags embed_frontend ./...
+go test -tags dev_frontend ./...
 ```
 
 ## API
